@@ -2,11 +2,11 @@
   "name": "remaju-scraper",
   "version": "1.0.0",
   "description": "REMAJU (Registro de bienes en remate judicial) scraper with TypeScript - Extracts auction data from rema ju.pj.gob.pe",
-  "main": "dist/scraper.js",
+  "main": "dist/main.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/scraper.js",
-    "dev": "ts-node src/scraper.ts",
+    "start": "node dist/main.js",
+    "dev": "ts-node src/main.ts",
     "clean": "rimraf dist",
     "type-check": "tsc --noEmit",
     "lint": "eslint src/**/*.ts"
