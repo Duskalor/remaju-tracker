@@ -31,6 +31,7 @@ export interface ScraperConfig {
     timeout: number;
     retryMax: number;
     dbPath: string;
+    userDataDir: string;
     logLevel: 'error' | 'warn' | 'info' | 'debug';
     logFile: string;
 }

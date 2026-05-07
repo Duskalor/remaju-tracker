@@ -1,29 +1,33 @@
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import { chromium, BrowserContext, Page } from 'playwright';
+import { resolve } from 'path';
+import { mkdirSync, existsSync } from 'fs';
 import { logger } from '../logger';
 import { config } from '../config';
 
 export class BrowserClient {
-  private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private page: Page | null = null;
 
   async initialize(): Promise<Page> {
-    this.browser = await chromium.launch({
+    const userDataDir = resolve(process.cwd(), config.userDataDir);
+    if (!existsSync(userDataDir)) mkdirSync(userDataDir, { recursive: true });
+
+    this.context = await chromium.launchPersistentContext(userDataDir, {
+      channel: 'chrome',
       headless: config.headless,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-
-    this.context = await this.browser.newContext({
       userAgent:
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       viewport: { width: 1920, height: 1080 },
+      locale: 'es-PE',
+      timezoneId: 'America/Lima',
     });
 
-    this.page = await this.context.newPage();
+    this.page = this.context.pages()[0] ?? await this.context.newPage();
     this.page.setDefaultTimeout(config.timeout);
 
     await this.applyStealth();
-    logger.info('Browser initialized');
+    logger.info('Browser initialized', { userDataDir, channel: 'chrome' });
     return this.page;
   }
 
@@ -37,7 +41,7 @@ export class BrowserClient {
           { name: 'Chrome PDF Viewer', description: '', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', length: 1 },
         ],
       });
-      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+      Object.defineProperty(navigator, 'languages', { get: () => ['es-PE', 'es', 'en-US', 'en'] });
     });
   }
 
@@ -48,9 +52,11 @@ export class BrowserClient {
 
   async close(): Promise<void> {
     try {
-      if (this.page) { await this.page.close(); this.page = null; }
-      if (this.context) { await this.context.close(); this.context = null; }
-      if (this.browser) { await this.browser.close(); this.browser = null; }
+      if (this.context) {
+        await this.context.close();
+        this.context = null;
+        this.page = null;
+      }
       logger.info('Browser closed');
     } catch (error: any) {
       logger.warn('Error closing browser', { error: error.message });

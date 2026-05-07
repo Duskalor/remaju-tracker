@@ -32,6 +32,6 @@ export async function simulateScroll(page: Page): Promise<void> {
   logger.info(`[BEHAVIOR] Scroll: ${scrollAmount}px`);
 }
 
-export function getRandomDelay(min: number = 2000, max: number = 7000): number {
+export function getRandomDelay(min: number = 3000, max: number = 7000): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }

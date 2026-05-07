@@ -42,10 +42,11 @@ export const config: ScraperConfig = {
   remajuUrl:
     process.env.REMAJU_URL ||
     'https://remaju.pj.gob.pe/remaju/pages/publico/remateExterno.xhtml',
-  headless: false, // default true
+  headless: false,
   timeout: getNumericEnv('TIMEOUT_MS', 30000),
   retryMax: getNumericEnv('RETRY_MAX', 3),
   dbPath: process.env.DB_PATH || './data/remates.db',
+  userDataDir: process.env.USER_DATA_DIR || './browser-data',
   logLevel: getValidLogLevel(),
   logFile: process.env.LOG_FILE || './logs/scraper.log',
 };
