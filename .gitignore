@@ -1,0 +1,38 @@
+# Ignored files for remaju-scraper
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build output
+dist/
+*.js
+*.d.ts
+*.js.map
+*.d.ts.map
+
+# Environment variables (contains secrets)
+.env
+
+# Data and logs
+data/
+logs/
+output/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# openspec (if using file-based artifacts)
+openspec/
+
+# Test artifacts
+coverage/
+.nyc_output/
