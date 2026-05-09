@@ -4,12 +4,18 @@
 node_modules/
 package-lock.json
 
-# Build output
+# Build output (monorepo — each app/package manages its own dist/)
 dist/
-*.js
-*.d.ts
-*.js.map
-*.d.ts.map
+apps/*/dist/
+packages/*/dist/
+
+# Turbo cache
+.turbo/
+apps/*/.turbo/
+packages/*/.turbo/
+
+# TypeScript incremental build info
+*.tsbuildinfo
 
 # Environment variables (contains secrets)
 .env
@@ -18,6 +24,9 @@ dist/
 data/
 logs/
 output/
+
+# Browser profile data (Puppeteer/Playwright userDataDir)
+browser-data/
 
 # OS files
 .DS_Store
@@ -36,3 +45,8 @@ openspec/
 # Test artifacts
 coverage/
 .nyc_output/
+
+# Ad-hoc debugging scripts
+check-db-schema.js
+inspect-card.js
+query-first-five.js

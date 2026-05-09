@@ -1,0 +1,28 @@
+{
+  "name": "@remaju/database",
+  "version": "1.0.0",
+  "description": "Database layer for Remaju Intelligence System — Drizzle ORM with SQLite (dev) and PostgreSQL (prod)",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "db:backup": "node scripts/backup.cjs",
+    "db:push": "node scripts/backup.cjs && drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@remaju/shared": "workspace:*",
+    "better-sqlite3": "^11.0.0",
+    "drizzle-orm": "^0.36.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "drizzle-kit": "^0.28.0",
+    "rimraf": "^5.0.0",
+    "typescript": "^5.3.0"
+  }
+}
