@@ -1,5 +1,10 @@
 export { createSqliteClient, schema, type DbClient } from './client';
-export { RemateRepository, type BatchResult, type FindAllOptions, type PaginatedResult } from './repository';
+export {
+  RemateRepository,
+  type BatchResult,
+  type FindAllOptions,
+  type PaginatedResult,
+} from './repository';
 export {
   remates,
   remateInmuebles,
@@ -17,4 +22,18 @@ export {
 
 // Re-export de los query builders de Drizzle — permite que los packages
 // dependientes usen Drizzle sin necesitar drizzle-orm como dependencia directa.
-export { eq, and, or, isNull, lt, lte, gt, gte, desc, asc, sql, not, inArray } from 'drizzle-orm';
+export {
+  eq,
+  and,
+  or,
+  isNull,
+  lt,
+  lte,
+  gt,
+  gte,
+  desc,
+  asc,
+  sql,
+  not,
+  inArray,
+} from 'drizzle-orm';
