@@ -1,4 +1,4 @@
-import { createTRPCReact } from '@trpc/react-query';
+import { createTRPCReact, type CreateTRPCReact } from '@trpc/react-query';
 import type { AppRouter } from '@remaju/api';
 
-export const api = createTRPCReact<AppRouter>();
+export const api: CreateTRPCReact<AppRouter, unknown> = createTRPCReact<AppRouter>();
