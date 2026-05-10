@@ -1,0 +1,27 @@
+{
+  "name": "@remaju/api",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "ts-node src/index.ts",
+    "clean": "rimraf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "@remaju/database": "workspace:*",
+    "@remaju/shared": "workspace:*",
+    "@hono/node-server": "^1.13.0",
+    "@hono/trpc-server": "^0.3.4",
+    "@trpc/server": "^11.0.0",
+    "hono": "^4.7.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "rimraf": "^5.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.3.0"
+  }
+}
