@@ -6,6 +6,7 @@ package-lock.json
 
 # Build output (monorepo — each app/package manages its own dist/)
 dist/
+.next/
 apps/*/dist/
 packages/*/dist/
 
