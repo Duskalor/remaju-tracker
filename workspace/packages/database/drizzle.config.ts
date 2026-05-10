@@ -1,8 +1,8 @@
 import { defineConfig } from 'drizzle-kit';
 import { resolve } from 'path';
 
-// Default DB path relative to monorepo root (since cwd = packages/database)
-const defaultDbPath = resolve(process.cwd(), '..', '..', 'data', 'remates.db');
+// Default DB path relative to monorepo root (since cwd = workspace/packages/database)
+const defaultDbPath = resolve(process.cwd(), '..', '..', '..', 'data', 'remates.db');
 
 export default defineConfig({
   schema: './src/schema/index.ts',

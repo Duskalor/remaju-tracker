@@ -23,7 +23,7 @@ export class BrowserClient {
       timezoneId: 'America/Lima',
     });
 
-    this.page = this.context.pages()[0] ?? await this.context.newPage();
+    this.page = this.context.pages()[0] ?? (await this.context.newPage());
     this.page.setDefaultTimeout(config.timeout);
 
     await this.applyStealth();
@@ -37,16 +37,29 @@ export class BrowserClient {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
       Object.defineProperty(navigator, 'plugins', {
         get: () => [
-          { name: 'Chrome PDF Plugin', description: 'Portable Document Format', filename: 'internal-pdf-viewer', length: 1 },
-          { name: 'Chrome PDF Viewer', description: '', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', length: 1 },
+          {
+            name: 'Chrome PDF Plugin',
+            description: 'Portable Document Format',
+            filename: 'internal-pdf-viewer',
+            length: 1,
+          },
+          {
+            name: 'Chrome PDF Viewer',
+            description: '',
+            filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
+            length: 1,
+          },
         ],
       });
-      Object.defineProperty(navigator, 'languages', { get: () => ['es-PE', 'es', 'en-US', 'en'] });
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['es-PE', 'es', 'en-US', 'en'],
+      });
     });
   }
 
   getPage(): Page {
-    if (!this.page) throw new Error('Browser not initialized. Call initialize() first.');
+    if (!this.page)
+      throw new Error('Browser not initialized. Call initialize() first.');
     return this.page;
   }
 

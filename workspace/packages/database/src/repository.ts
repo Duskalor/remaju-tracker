@@ -1,6 +1,21 @@
-import { eq, sql, type SQL } from 'drizzle-orm';
+import { and, eq, sql, type SQL } from 'drizzle-orm';
 import type { DbClient } from './client';
 import { remates, type Remate, type NewRemate } from './schema';
+
+export interface FindAllOptions {
+  page?: number;
+  limit?: number;
+  estado?: string;
+  distrito?: string;
+  tipoRemate?: string;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
 
 export interface BatchResult {
   success: number;
@@ -63,9 +78,33 @@ export class RemateRepository {
     return result;
   }
 
-  /**
-   * Find a single remate by expediente number.
-   */
+  findAll({
+    page = 1,
+    limit = 20,
+    estado,
+    distrito,
+    tipoRemate,
+  }: FindAllOptions = {}): PaginatedResult<Remate> {
+    const offset = (page - 1) * limit;
+    const conditions: SQL[] = [];
+
+    if (estado) conditions.push(eq(remates.estado, estado));
+    if (distrito) conditions.push(eq(remates.distrito, distrito));
+    if (tipoRemate) conditions.push(eq(remates.tipoRemate, tipoRemate));
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const data = this.db.select().from(remates).where(where).limit(limit).offset(offset).all();
+
+    const countRow = this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(remates)
+      .where(where)
+      .get();
+
+    return { data, total: countRow?.count ?? 0, page, limit };
+  }
+
   findByExpediente(expediente: string): Remate | undefined {
     const row = this.db
       .select()

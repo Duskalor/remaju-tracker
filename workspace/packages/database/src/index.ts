@@ -19,5 +19,5 @@
  */
 
 export { createSqliteClient, schema, type DbClient } from './client';
-export { RemateRepository, type BatchResult } from './repository';
+export { RemateRepository, type BatchResult, type FindAllOptions, type PaginatedResult } from './repository';
 export { remates, type Remate, type NewRemate } from './schema';

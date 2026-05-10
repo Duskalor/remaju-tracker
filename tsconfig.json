@@ -2,8 +2,10 @@
   "extends": "./tsconfig.base.json",
   "files": [],
   "references": [
-    { "path": "./packages/shared" },
-    { "path": "./packages/database" },
-    { "path": "./apps/scraper" }
+    { "path": "./workspace/packages/shared" },
+    { "path": "./workspace/packages/regex-engine" },
+    { "path": "./workspace/packages/database" },
+    { "path": "./workspace/apps/scraper" },
+    { "path": "./workspace/apps/api" }
   ]
 }
