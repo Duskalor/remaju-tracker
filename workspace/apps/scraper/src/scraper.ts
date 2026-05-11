@@ -65,7 +65,9 @@ export class RemajuScraper {
         const parsed = parseRematesTable(html, config.remajuUrl);
 
         if (!parsed.success) {
-          logger.warn(`Page ${currentPage} had parse errors`, { count: parsed.errors?.length });
+          logger.warn(`Page ${currentPage} had parse errors`, {
+            count: parsed.errors?.length,
+          });
           this.stats.errorsEncountered += parsed.errors?.length || 0;
         }
 
@@ -84,7 +86,10 @@ export class RemajuScraper {
 
         if (hasMore) {
           const ok = await this.navigator!.navigateToPage(currentPage + 1);
-          if (!ok) { logger.warn('Could not navigate to next page, stopping'); break; }
+          if (!ok) {
+            logger.warn('Could not navigate to next page, stopping');
+            break;
+          }
           currentPage++;
         }
       } catch (error: any) {
@@ -92,13 +97,20 @@ export class RemajuScraper {
         this.stats.errorsEncountered++;
         this.failedPages.push(currentPage);
 
-        const pagination = await this.navigator!.getPaginationInfo().catch(() => ({
-          hasNext: false, currentPage: 1, totalPages: 1, totalRows: 0,
-        }));
+        const pagination = await this.navigator!.getPaginationInfo().catch(
+          () => ({
+            hasNext: false,
+            currentPage: 1,
+            totalPages: 1,
+            totalRows: 0,
+          }),
+        );
         hasMore = pagination.hasNext;
         if (hasMore) {
           currentPage++;
-          await this.navigator!.navigateToPage(currentPage).catch(() => { hasMore = false; });
+          await this.navigator!.navigateToPage(currentPage).catch(() => {
+            hasMore = false;
+          });
         } else {
           break;
         }
@@ -106,17 +118,21 @@ export class RemajuScraper {
     }
 
     logger.info(`Scraping done. Pages: ${this.stats.pagesScraped}`);
-    if (this.failedPages.length > 0) logger.warn(`Failed pages: ${this.failedPages.join(', ')}`);
+    if (this.failedPages.length > 0)
+      logger.warn(`Failed pages: ${this.failedPages.join(', ')}`);
   }
 
   private finalizeStats(): void {
     this.stats.endTime = new Date().toISOString();
     this.stats.durationMs =
-      new Date(this.stats.endTime).getTime() - new Date(this.stats.startTime).getTime();
+      new Date(this.stats.endTime).getTime() -
+      new Date(this.stats.startTime).getTime();
   }
 
   private async cleanup(): Promise<void> {
-    try { await this.client.close(); } catch {}
+    try {
+      await this.client.close();
+    } catch {}
     this.repository?.close();
   }
 }
