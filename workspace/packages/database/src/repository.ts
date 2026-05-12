@@ -22,19 +22,9 @@ export interface BatchResult {
   failed: number;
 }
 
-/**
- * Repository for remates table — wraps Drizzle queries.
- *
- * Provides the same API surface as the original scraper storage
- * so the migration is minimal, but powered by Drizzle ORM underneath.
- */
 export class RemateRepository {
   constructor(private db: DbClient) {}
 
-  /**
-   * Batch upsert: insert or update rows by expediente.
-   * Uses Drizzle's onConflictDoUpdate for SQLite.
-   */
   upsertBatch(rows: NewRemate[]): BatchResult {
     const result: BatchResult = { success: 0, failed: 0 };
 
@@ -46,25 +36,25 @@ export class RemateRepository {
           .onConflictDoUpdate({
             target: remates.expediente,
             set: {
-              remateNumero: row.remateNumero,
-              tipoRemate: row.tipoRemate,
-              fechaRemate: row.fechaRemate,
+              remate_numero: row.remate_numero,
+              tipo_remate: row.tipo_remate,
+              fecha_remate: row.fecha_remate,
               bienes: row.bienes,
               estado: row.estado,
               juzgado: row.juzgado,
               direccion: row.direccion,
               observaciones: row.observaciones,
-              rawHtml: row.rawHtml,
-              sourceUrl: row.sourceUrl,
+              raw_html: row.raw_html,
+              source_url: row.source_url,
               distrito: row.distrito,
               provincia: row.provincia,
               departamento: row.departamento,
               partida: row.partida,
-              areaM2: row.areaM2,
-              descripcionRaw: row.descripcionRaw,
-              direccionRaw: row.direccionRaw,
-              precioPorM2: row.precioPorM2,
-              tipoInmueble: row.tipoInmueble,
+              area_m2: row.area_m2,
+              descripcion_raw: row.descripcion_raw,
+              direccion_raw: row.direccion_raw,
+              precio_por_m2: row.precio_por_m2,
+              tipo_inmueble: row.tipo_inmueble,
             },
           })
           .run();
@@ -90,7 +80,7 @@ export class RemateRepository {
 
     if (estado) conditions.push(eq(remates.estado, estado));
     if (distrito) conditions.push(eq(remates.distrito, distrito));
-    if (tipoRemate) conditions.push(eq(remates.tipoRemate, tipoRemate));
+    if (tipoRemate) conditions.push(eq(remates.tipo_remate, tipoRemate));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -115,9 +105,6 @@ export class RemateRepository {
     return row ?? undefined;
   }
 
-  /**
-   * Count all remates in the database.
-   */
   countAll(): number {
     const row = this.db
       .select({ count: sql<number>`count(*)` })
@@ -127,9 +114,6 @@ export class RemateRepository {
     return row?.count ?? 0;
   }
 
-  /**
-   * Close the underlying SQLite connection.
-   */
   close(): void {
     this.db.$client.close();
   }
