@@ -33,19 +33,19 @@
     "@remaju/regex-engine": "workspace:*",
     "@remaju/shared": "workspace:*",
     "cheerio": "1.2.0",
-    "croner": "^9.0.0",
+    "croner": "^10.0.1",
     "dotenv": "17.4.2",
     "drizzle-orm": "0.45.2",
     "playwright": "npm:rebrowser-playwright@1.52.0",
     "winston": "3.19.0"
   },
   "devDependencies": {
-    "@playwright/test": "1.59.1",
-    "@types/node": "25.6.2",
+    "@playwright/test": "1.60.0",
+    "@types/node": "25.7.0",
     "rimraf": "6.1.3",
     "ts-node": "10.9.2",
-    "tsx": "^4.19.4",
+    "tsx": "^4.21.0",
     "typescript": "6.0.3",
-    "vitest": "3.2.4"
+    "vitest": "4.1.6"
   }
 }

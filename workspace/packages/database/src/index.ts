@@ -4,6 +4,12 @@ export {
   type BatchResult,
   type FindAllOptions,
   type PaginatedResult,
+  type PendingDetailOptions,
+  type DetailPayload,
+  type DetailTabRemate,
+  type DetailInmueble,
+  type DetailFase,
+  type DetailCronograma,
 } from './repository';
 export {
   remates,
