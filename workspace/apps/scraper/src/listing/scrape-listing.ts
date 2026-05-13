@@ -189,14 +189,3 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-if (require.main === module) {
-  scrapeListing()
-    .then((result) => {
-      console.log('OK', result);
-      process.exit(0);
-    })
-    .catch((err) => {
-      console.error('FATAL', err);
-      process.exit(1);
-    });
-}
