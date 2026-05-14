@@ -1,6 +1,9 @@
 import type { Page } from 'playwright';
-import { resolve } from 'path';
-import { createSqliteClient, RemateRepository, type PendingDetailOptions } from '@remaju/database';
+import {
+  createSqliteClient,
+  RemateRepository,
+  type PendingDetailOptions,
+} from '@remaju/database';
 import { parseTabRemate } from './parsers/tab-remate';
 import { parseTabInmuebles } from './parsers/tab-inmuebles';
 import { parseTabCronograma } from './parsers/tab-cronograma';
@@ -11,27 +14,34 @@ const URL_BUSCADOR =
   'https://remaju.pj.gob.pe/remaju/pages/publico/remateExterno.xhtml';
 
 const SELECTORS = {
-  inputRemate:     'input[name$=":filtroRemate"]',
-  inputCaptcha:    'input.captcha-input',
-  buttonAplicar:   'button:has-text("APLICAR")',
-  buttonDetalle:   'button:has-text("Detalle")',
-  tabInmuebles:    'li[role="tab"][data-index="1"]',
-  tabCronograma:   'li[role="tab"][data-index="2"]',
-  noResults:       'span.label-warning',
-  panelRemate:     '[id$=":pgResumenRemate"]',
-  tabPanelInmuebles:  '[id$=":tbInmuebles"]',
+  inputRemate: 'input[name$=":filtroRemate"]',
+  inputCaptcha: 'input.captcha-input',
+  buttonAplicar: 'button:has-text("APLICAR")',
+  buttonDetalle: 'button:has-text("Detalle")',
+  tabInmuebles: 'li[role="tab"][data-index="1"]',
+  tabCronograma: 'li[role="tab"][data-index="2"]',
+  noResults: 'span.label-warning',
+  panelRemate: '[id$=":pgResumenRemate"]',
+  tabPanelInmuebles: '[id$=":tbInmuebles"]',
   tabPanelCronograma: '[id$=":tbCronograma"]',
 } as const;
 
 const TIMEOUTS = {
-  navigation:      30_000,
-  ajax:            15_000,
-  betweenRequests:  3_000,
+  navigation: 30_000,
+  ajax: 15_000,
+  betweenRequests: 3_000,
 } as const;
 
-async function clickTab(page: Page, tabIndex: number, panelSelector: string): Promise<void> {
+async function clickTab(
+  page: Page,
+  tabIndex: number,
+  panelSelector: string,
+): Promise<void> {
   const tabSelector = `li[role="tab"][data-index="${tabIndex}"]`;
-  await page.waitForSelector(tabSelector, { state: 'visible', timeout: TIMEOUTS.ajax });
+  await page.waitForSelector(tabSelector, {
+    state: 'visible',
+    timeout: TIMEOUTS.ajax,
+  });
   await page.click(tabSelector);
   await page.waitForLoadState('networkidle', { timeout: TIMEOUTS.ajax });
 
@@ -52,9 +62,13 @@ async function dismissDialog(page: Page): Promise<void> {
     if (!isBlocked) return;
     // Cerrar via PrimeFaces API directamente
     await page.evaluate(() => {
-      try { (window as any).PF('dlgEstado')?.hide(); } catch {}
+      try {
+        (window as any).PF('dlgEstado')?.hide();
+      } catch {}
     });
-    await page.waitForSelector('#dlgEstado_modal', { state: 'hidden', timeout: 3_000 }).catch(() => {});
+    await page
+      .waitForSelector('#dlgEstado_modal', { state: 'hidden', timeout: 3_000 })
+      .catch(() => {});
   } catch {}
 }
 
@@ -82,13 +96,17 @@ async function scrapeRemateDetail(page: Page, remateNumero: string) {
     throw new RemateNotFoundError(remateNumero);
   }
 
-  await page.waitForSelector(SELECTORS.buttonDetalle, { timeout: TIMEOUTS.ajax });
+  await page.waitForSelector(SELECTORS.buttonDetalle, {
+    timeout: TIMEOUTS.ajax,
+  });
 
   // Algunos remates muestran un dialogo de estado automáticamente que bloquea el click
   await dismissDialog(page);
   await page.click(SELECTORS.buttonDetalle);
   try {
-    await page.waitForSelector(SELECTORS.panelRemate, { timeout: TIMEOUTS.ajax });
+    await page.waitForSelector(SELECTORS.panelRemate, {
+      timeout: TIMEOUTS.ajax,
+    });
   } catch {
     const isStillOnSearch =
       (await page.locator(SELECTORS.noResults).isVisible()) ||
@@ -102,11 +120,15 @@ async function scrapeRemateDetail(page: Page, remateNumero: string) {
   const tabRemate = parseTabRemate(htmlRemate);
 
   await clickTab(page, 1, SELECTORS.tabPanelInmuebles);
-  const htmlInmuebles = await page.locator(SELECTORS.tabPanelInmuebles).innerHTML();
+  const htmlInmuebles = await page
+    .locator(SELECTORS.tabPanelInmuebles)
+    .innerHTML();
   const tabInmuebles = parseTabInmuebles(htmlInmuebles);
 
   await clickTab(page, 2, SELECTORS.tabPanelCronograma);
-  const htmlCronograma = await page.locator(SELECTORS.tabPanelCronograma).innerHTML();
+  const htmlCronograma = await page
+    .locator(SELECTORS.tabPanelCronograma)
+    .innerHTML();
   const tabCronograma = parseTabCronograma(htmlCronograma);
 
   const allWarnings = [
@@ -115,7 +137,10 @@ async function scrapeRemateDetail(page: Page, remateNumero: string) {
     ...tabCronograma.parse_warnings.map((w) => `[cronograma] ${w}`),
   ];
   if (allWarnings.length > 0) {
-    console.warn(`[scrape:detail] Warnings remate ${remateNumero}:`, allWarnings);
+    console.warn(
+      `[scrape:detail] Warnings remate ${remateNumero}:`,
+      allWarnings,
+    );
   }
 
   return { tabRemate, tabInmuebles, tabCronograma };
@@ -124,8 +149,7 @@ async function scrapeRemateDetail(page: Page, remateNumero: string) {
 async function main(options: PendingDetailOptions = {}): Promise<void> {
   console.log('[scrape:detail] Iniciando con opciones:', options);
 
-  const dbPath = process.env.DATABASE_URL ?? resolve(__dirname, '../../data/remates.db');
-  const repo = new RemateRepository(createSqliteClient(dbPath));
+  const repo = new RemateRepository(createSqliteClient(config.dbPath));
 
   let processed = 0;
   let failed = 0;
@@ -158,7 +182,9 @@ async function main(options: PendingDetailOptions = {}): Promise<void> {
             break;
           }
           lastError = err instanceof Error ? err.message : String(err);
-          console.warn(`  intento ${attempt}/${config.retryMax} falló: ${lastError}`);
+          console.warn(
+            `  intento ${attempt}/${config.retryMax} falló: ${lastError}`,
+          );
           if (attempt < config.retryMax) {
             await sleep(TIMEOUTS.betweenRequests * 2);
             try {
@@ -172,7 +198,9 @@ async function main(options: PendingDetailOptions = {}): Promise<void> {
       }
 
       if (notFound) {
-        console.warn(`  ✗ ${remate_numero} no existe en el portal — archivando`);
+        console.warn(
+          `  ✗ ${remate_numero} no existe en el portal — archivando`,
+        );
         repo.markNotFound(id);
         failed++;
       } else if (!success) {
@@ -187,7 +215,9 @@ async function main(options: PendingDetailOptions = {}): Promise<void> {
     await client.close();
     repo.finishScrapingRun(runId, { processed, failed });
     repo.close();
-    console.log(`[scrape:detail] Terminado. OK: ${processed}, Fallaron: ${failed}`);
+    console.log(
+      `[scrape:detail] Terminado. OK: ${processed}, Fallaron: ${failed}`,
+    );
   }
 }
 

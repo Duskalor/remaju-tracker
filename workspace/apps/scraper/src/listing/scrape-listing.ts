@@ -1,95 +1,29 @@
-import { eq, sql, createSqliteClient, remates, scrapingRuns } from '@remaju/database';
-import type { Page } from 'playwright';
-import { parseCard } from './parsers/card';
-import { batchUpsertCards, type UpsertInput } from './persist/upsert-card';
-import { archiveStaleRemates } from './persist/archive-stale';
+import { eq, createSqliteClient, RemateRepository, remates, scrapingRuns } from '@remaju/database';
 import { BrowserClient } from '../browser/client';
+import { RemajuNavigator } from '../browser/navigator';
+import { parseRematesTable } from '../parsing/card-parser';
+import { rematesToDatabaseRows } from '../parsing/transforms';
+import { archiveStaleRemates } from './persist/archive-stale';
+import { config } from '../config';
 
 const URL_LISTADO = 'https://remaju.pj.gob.pe/remaju/pages/publico/remateExterno.xhtml';
-
-const SELECTORS = {
-  card: '[id^="formBuscarRemateExterno:listaRemate:"][id$="_content"]',
-  nextPageButton: 'a.ui-paginator-next:not(.ui-state-disabled)',
-  currentPage: '.ui-paginator-current',
-} as const;
-
-const TIMEOUTS = {
-  navigation: 30_000,
-  pageChange: 10_000,
-  betweenPages: 2_000,
-};
 
 interface ListingResult {
   total_cards_seen: number;
   cards_parsed_ok: number;
   cards_parse_failed: number;
-  upsert_inserted: number;
-  upsert_updated: number;
+  upsert_ok: number;
   upsert_failed: number;
   archived: number;
   duration_seconds: number;
-}
-
-async function scrapeCurrentPage(page: Page): Promise<UpsertInput[]> {
-  const allCards = page.locator(SELECTORS.card).filter({ hasText: /Remate\s+N°/i });
-  const count = await allCards.count();
-
-  const inputs: UpsertInput[] = [];
-  const sourceUrl = page.url();
-  const now = new Date().toISOString();
-  const seenNumeros = new Set<string>();
-
-  for (let i = 0; i < count; i++) {
-    const cardHtml = await allCards.nth(i).innerHTML();
-    const parsed = parseCard(cardHtml);
-
-    if (!parsed.remate_numero) continue;
-    if (seenNumeros.has(parsed.remate_numero)) continue;
-
-    seenNumeros.add(parsed.remate_numero);
-    inputs.push({
-      remate_numero: parsed.remate_numero,
-      card: parsed,
-      source_url: sourceUrl,
-      raw_html: cardHtml,
-      scraped_at: now,
-    });
-  }
-
-  console.log(`[scrape:listing] ${inputs.length} cards únicos en página actual (${count} elementos totales)`);
-  return inputs;
-}
-
-async function goToNextPage(page: Page): Promise<boolean> {
-  const nextButton = page.locator(SELECTORS.nextPageButton);
-
-  if ((await nextButton.count()) === 0) return false;
-
-  const currentPageEl = page.locator(SELECTORS.currentPage);
-  if ((await currentPageEl.count()) === 0) return false;
-
-  const beforeText = await currentPageEl.textContent({ timeout: 5_000 }).catch(() => null);
-  if (beforeText === null) return false;
-
-  await nextButton.click();
-
-  await page.waitForFunction(
-    ({ selector, before }: { selector: string; before: string | null }) => {
-      const el = document.querySelector(selector);
-      return el && el.textContent !== before;
-    },
-    { selector: SELECTORS.currentPage, before: beforeText },
-    { timeout: TIMEOUTS.pageChange },
-  );
-
-  return true;
 }
 
 export async function scrapeListing(): Promise<ListingResult> {
   const startTime = Date.now();
   console.log('[scrape:listing] Iniciando');
 
-  const db = createSqliteClient();
+  const db = createSqliteClient(config.dbPath);
+  const repository = new RemateRepository(db);
 
   const runRow = db
     .insert(scrapingRuns)
@@ -103,8 +37,7 @@ export async function scrapeListing(): Promise<ListingResult> {
     total_cards_seen: 0,
     cards_parsed_ok: 0,
     cards_parse_failed: 0,
-    upsert_inserted: 0,
-    upsert_updated: 0,
+    upsert_ok: 0,
     upsert_failed: 0,
     archived: 0,
     duration_seconds: 0,
@@ -113,83 +46,85 @@ export async function scrapeListing(): Promise<ListingResult> {
   let runStatus = 'failed';
 
   try {
-    const page = await client.initialize();
+    await client.initialize();
+    const navigator = new RemajuNavigator(client);
 
-    await page.goto(URL_LISTADO, {
-      waitUntil: 'networkidle',
-      timeout: TIMEOUTS.navigation,
-    });
-    await page.waitForSelector(SELECTORS.card);
+    await navigator.navigateToRemaju(URL_LISTADO);
 
-    let pageNum = 1;
-    const allInputs: UpsertInput[] = [];
+    let currentPage = 1;
+    let hasMore = true;
 
-    while (true) {
-      console.log(`[scrape:listing] Procesando página ${pageNum}`);
+    while (hasMore) {
+      console.log(`[scrape:listing] Procesando página ${currentPage}`);
 
-      const inputs = await scrapeCurrentPage(page);
-      result.total_cards_seen += inputs.length;
-      result.cards_parsed_ok += inputs.filter((i) => i.card.parse_warnings.length === 0).length;
-      result.cards_parse_failed += inputs.filter((i) => i.card.parse_warnings.length > 0).length;
+      const html = await navigator.getPageHtml();
+      const parsed = parseRematesTable(html, URL_LISTADO);
 
-      allInputs.push(...inputs);
+      result.total_cards_seen += parsed.totalRows ?? 0;
+      result.cards_parsed_ok += parsed.parsedRows ?? 0;
+      result.cards_parse_failed += parsed.errors?.length ?? 0;
 
-      const hasNext = await goToNextPage(page);
-      if (!hasNext) {
-        console.log(`[scrape:listing] No hay más páginas, total: ${pageNum}`);
-        break;
+      if (parsed.data?.length) {
+        const rows = rematesToDatabaseRows(parsed.data);
+        const upsertResult = repository.upsertBatch(rows);
+        result.upsert_ok += upsertResult.success;
+        result.upsert_failed += upsertResult.failed;
+        console.log(
+          `[scrape:listing] Página ${currentPage}: ${parsed.parsedRows} cards → upsert ok:${upsertResult.success} fail:${upsertResult.failed}`,
+        );
+      } else {
+        console.warn(`[scrape:listing] Página ${currentPage}: sin cards —`, parsed.errors?.[0]?.message);
       }
 
-      pageNum++;
-      await sleep(TIMEOUTS.betweenPages);
+      const pagination = await navigator.getPaginationInfo();
+      hasMore = pagination.hasNext;
+
+      if (hasMore) {
+        const ok = await navigator.navigateToPage(currentPage + 1);
+        if (!ok) {
+          console.warn('[scrape:listing] No se pudo navegar a la página siguiente, deteniendo');
+          break;
+        }
+        currentPage++;
+      } else {
+        console.log(`[scrape:listing] No hay más páginas, total procesadas: ${currentPage}`);
+      }
     }
-
-    const uniqueNumeros = new Set(allInputs.map((i) => i.remate_numero));
-    console.log(`[scrape:listing] Aplicando UPSERT de ${allInputs.length} cards (${uniqueNumeros.size} remate_numero únicos)`);
-    if (uniqueNumeros.size < allInputs.length) {
-      const dupes = allInputs.map((i) => i.remate_numero).filter((n, idx, arr) => arr.indexOf(n) !== idx);
-      console.warn(`[scrape:listing] ⚠ Duplicados detectados:`, [...new Set(dupes)]);
-    }
-
-    const countBefore = (db.select({ c: sql<number>`count(*)` }).from(remates).get() as any)?.c ?? 0;
-    console.log(`[scrape:listing] Filas en BD antes del UPSERT: ${countBefore}`);
-
-    const upsertResult = batchUpsertCards(db, remates, allInputs);
-    result.upsert_inserted = upsertResult.inserted;
-    result.upsert_updated = upsertResult.updated;
-    result.upsert_failed = upsertResult.failed;
-    console.log(`[scrape:listing] UPSERT result → inserted:${upsertResult.inserted} updated:${upsertResult.updated} failed:${upsertResult.failed}`);
-
-    const countAfterUpsert = (db.select({ c: sql<number>`count(*)` }).from(remates).get() as any)?.c ?? 0;
-    console.log(`[scrape:listing] Filas en BD después del UPSERT: ${countAfterUpsert}`);
 
     if (result.upsert_failed === 0) {
       runStatus = 'success';
       db.update(scrapingRuns)
-        .set({ status: 'success', finished_at: new Date().toISOString(), records_processed: result.total_cards_seen })
+        .set({
+          status: 'success',
+          finished_at: new Date().toISOString(),
+          records_processed: result.total_cards_seen,
+        })
         .where(eq(scrapingRuns.id, runId))
         .run();
 
       const archiveResult = archiveStaleRemates(db, remates, scrapingRuns);
       result.archived = archiveResult.archived_count;
-      console.log(`[scrape:listing] Archive result → archived:${archiveResult.archived_count} dry_run:${archiveResult.dry_run} threshold:${archiveResult.threshold_iso}`);
-
-      const countAfterArchive = (db.select({ c: sql<number>`count(*)` }).from(remates).get() as any)?.c ?? 0;
-      console.log(`[scrape:listing] Filas en BD después del archivo: ${countAfterArchive}`);
+      console.log(
+        `[scrape:listing] Archive → archived:${archiveResult.archived_count} threshold:${archiveResult.threshold_iso}`,
+      );
     } else {
       console.warn('[scrape:listing] Hubo errores en UPSERT, NO se archiva');
     }
-
   } catch (err) {
     console.error('[scrape:listing] FATAL:', err);
     throw err;
   } finally {
     await client.close();
+    repository.close();
     result.duration_seconds = (Date.now() - startTime) / 1000;
 
     if (runId && runStatus !== 'success') {
       db.update(scrapingRuns)
-        .set({ status: runStatus, finished_at: new Date().toISOString(), records_failed: result.upsert_failed })
+        .set({
+          status: runStatus,
+          finished_at: new Date().toISOString(),
+          records_failed: result.upsert_failed,
+        })
         .where(eq(scrapingRuns.id, runId))
         .run();
     }
@@ -199,8 +134,3 @@ export async function scrapeListing(): Promise<ListingResult> {
 
   return result;
 }
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
