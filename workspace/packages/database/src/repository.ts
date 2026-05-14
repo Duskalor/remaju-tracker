@@ -118,9 +118,8 @@ export class RemateRepository {
           .insert(remates)
           .values(row)
           .onConflictDoUpdate({
-            target: remates.expediente,
+            target: remates.remate_numero,
             set: {
-              remate_numero: row.remate_numero,
               tipo_remate: row.tipo_remate,
               fecha_remate: row.fecha_remate,
               bienes: row.bienes,
@@ -296,6 +295,17 @@ export class RemateRepository {
         detail_attempts:          sql`${remates.detail_attempts} + 1`,
         detail_last_error:        error,
         detail_extraction_failed: true,
+      })
+      .where(eq(remates.id, remateId))
+      .run();
+  }
+
+  markNotFound(remateId: number): void {
+    this.db.update(remates)
+      .set({
+        detail_attempts:   sql`${remates.detail_attempts} + 1`,
+        detail_last_error: 'not_found_in_buscador',
+        archived_at:       new Date().toISOString(),
       })
       .where(eq(remates.id, remateId))
       .run();

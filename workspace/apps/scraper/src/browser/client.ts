@@ -63,6 +63,16 @@ export class BrowserClient {
     return this.page;
   }
 
+  async resetPage(): Promise<Page> {
+    if (!this.context) throw new Error('Context not initialized');
+    try { await this.page?.close(); } catch {}
+    this.page = await this.context.newPage();
+    this.page.setDefaultTimeout(config.timeout);
+    await this.applyStealth();
+    logger.info('Page reset after crash');
+    return this.page;
+  }
+
   async close(): Promise<void> {
     try {
       if (this.context) {

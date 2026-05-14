@@ -115,14 +115,20 @@ function parseRows(
     const cells = $(row).find('td');
     if (cells.length < 4) return; // header o fila vacía
 
-    const getText = (col: number) => cells.eq(col).text().trim();
+    // PrimeFaces DataTable reflow inserta span.ui-column-title en cada td — lo eliminamos
+    const getText = (col: number) => {
+      const cell = cells.eq(col).clone();
+      cell.find('span.ui-column-title').remove();
+      return cell.text().trim();
+    };
 
     const numeroRaw = getText(COL.NUMERO);
     const nombre    = getText(COL.NOMBRE);
     const inicioRaw = getText(COL.INICIO);
     const finRaw    = getText(COL.FIN);
 
-    const fase_numero = parseInt(numeroRaw, 10);
+    const numeroDigits = numeroRaw.match(/\d+/)?.[0] ?? '';
+    const fase_numero = parseInt(numeroDigits, 10);
     if (isNaN(fase_numero)) {
       warnings.push(`fila con número de fase inválido: "${numeroRaw}"`);
       return;

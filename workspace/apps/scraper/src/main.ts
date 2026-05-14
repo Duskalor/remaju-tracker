@@ -1,20 +1,49 @@
 import { Cron } from 'croner';
-import { scrapeListing } from './listing/scrape-listing';
+import { RemajuScraper } from './scraper';
 import { scrapeDetail } from './detail/scrape-detail';
 
-async function runOnce(mode: string): Promise<void> {
+function parseDetailArgs(argv: string[]): {
+  force: boolean;
+  limit?: number;
+  remate?: string;
+  refreshDays?: number;
+} {
+  const force = argv.includes('--force');
+  const limitIdx = argv.indexOf('--limit');
+  const limit =
+    limitIdx !== -1 ? parseInt(argv[limitIdx + 1], 10) || undefined : undefined;
+  const remateIdx = argv.indexOf('--remate');
+  const remate = remateIdx !== -1 ? argv[remateIdx + 1] : undefined;
+  const refreshIdx = argv.indexOf('--refresh-days');
+  const refreshDays =
+    refreshIdx !== -1
+      ? parseInt(argv[refreshIdx + 1], 10) || undefined
+      : undefined;
+  return { force, limit, remate, refreshDays };
+}
+
+async function runOnce(mode: string, extraArgs: string[]): Promise<void> {
   console.log(`[main] Ejecutando una sola vez: ${mode}`);
 
   switch (mode) {
     case 'listing':
-      await scrapeListing();
+      await new RemajuScraper().run();
       break;
-    case 'detail':
-      await scrapeDetail();
+    case 'detail': {
+      const opts = parseDetailArgs(extraArgs);
+      if (
+        Object.keys(opts).some(
+          (k) => (opts as any)[k] !== undefined && (opts as any)[k] !== false,
+        )
+      ) {
+        console.log('[main] Opciones detail:', opts);
+      }
+      await scrapeDetail(opts);
       break;
+    }
     case 'all':
-      await scrapeListing();
-      await scrapeDetail();
+      await new RemajuScraper().run();
+      await scrapeDetail(parseDetailArgs(extraArgs));
       break;
     default:
       console.error(`[main] Modo desconocido: ${mode}`);
@@ -32,7 +61,7 @@ function startCronJobs(): void {
   new Cron('0 3 * * *', { timezone: tz, name: 'listing' }, async () => {
     console.log('[cron:listing] Iniciando');
     try {
-      await scrapeListing();
+      await new RemajuScraper().run();
       console.log('[cron:listing] OK');
     } catch (err) {
       console.error('[cron:listing] FALLÓ:', err);
@@ -60,10 +89,12 @@ async function bootstrap(): Promise<void> {
   if (mode === 'run-once') {
     const target = process.argv[3];
     if (!target) {
-      console.error('[main] Falta especificar qué correr: listing | detail | all');
+      console.error(
+        '[main] Falta especificar qué correr: listing | detail | all',
+      );
       process.exit(1);
     }
-    await runOnce(target);
+    await runOnce(target, process.argv.slice(4));
     return;
   }
 

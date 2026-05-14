@@ -81,7 +81,7 @@ export const remates = sqliteTable(
     score_version: text(),
   },
   (table) => [
-    uniqueIndex('idx_expediente').on(table.expediente),
+    index('idx_expediente').on(table.expediente),
     uniqueIndex('idx_remate_numero_unique').on(table.remate_numero),
     index('idx_scraped_at').on(table.scraped_at),
     index('idx_juzgado').on(table.juzgado),

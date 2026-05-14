@@ -1,10 +1,9 @@
-import { eq } from '@remaju/database';
-import { chromium, type Page } from 'playwright';
+import { eq, sql, createSqliteClient, remates, scrapingRuns } from '@remaju/database';
+import type { Page } from 'playwright';
 import { parseCard } from './parsers/card';
 import { batchUpsertCards, type UpsertInput } from './persist/upsert-card';
 import { archiveStaleRemates } from './persist/archive-stale';
-import { db } from '../db';
-import { remates, scrapingRuns } from '@remaju/database';
+import { BrowserClient } from '../browser/client';
 
 const URL_LISTADO = 'https://remaju.pj.gob.pe/remaju/pages/publico/remateExterno.xhtml';
 
@@ -32,24 +31,22 @@ interface ListingResult {
 }
 
 async function scrapeCurrentPage(page: Page): Promise<UpsertInput[]> {
-  const cards = page.locator(SELECTORS.card);
-  const count = await cards.count();
-
-  console.log(`[scrape:listing] ${count} cards en página actual`);
+  const allCards = page.locator(SELECTORS.card).filter({ hasText: /Remate\s+N°/i });
+  const count = await allCards.count();
 
   const inputs: UpsertInput[] = [];
   const sourceUrl = page.url();
   const now = new Date().toISOString();
+  const seenNumeros = new Set<string>();
 
   for (let i = 0; i < count; i++) {
-    const cardHtml = await cards.nth(i).innerHTML();
+    const cardHtml = await allCards.nth(i).innerHTML();
     const parsed = parseCard(cardHtml);
 
-    if (!parsed.remate_numero) {
-      console.warn(`[scrape:listing] card #${i} sin remate_numero, skipping`);
-      continue;
-    }
+    if (!parsed.remate_numero) continue;
+    if (seenNumeros.has(parsed.remate_numero)) continue;
 
+    seenNumeros.add(parsed.remate_numero);
     inputs.push({
       remate_numero: parsed.remate_numero,
       card: parsed,
@@ -59,6 +56,7 @@ async function scrapeCurrentPage(page: Page): Promise<UpsertInput[]> {
     });
   }
 
+  console.log(`[scrape:listing] ${inputs.length} cards únicos en página actual (${count} elementos totales)`);
   return inputs;
 }
 
@@ -67,7 +65,11 @@ async function goToNextPage(page: Page): Promise<boolean> {
 
   if ((await nextButton.count()) === 0) return false;
 
-  const beforeText = await page.locator(SELECTORS.currentPage).textContent();
+  const currentPageEl = page.locator(SELECTORS.currentPage);
+  if ((await currentPageEl.count()) === 0) return false;
+
+  const beforeText = await currentPageEl.textContent({ timeout: 5_000 }).catch(() => null);
+  if (beforeText === null) return false;
 
   await nextButton.click();
 
@@ -87,6 +89,8 @@ export async function scrapeListing(): Promise<ListingResult> {
   const startTime = Date.now();
   console.log('[scrape:listing] Iniciando');
 
+  const db = createSqliteClient();
+
   const runRow = db
     .insert(scrapingRuns)
     .values({ type: 'listing', started_at: new Date().toISOString(), status: 'running' })
@@ -94,7 +98,7 @@ export async function scrapeListing(): Promise<ListingResult> {
     .get();
   const runId = runRow?.id ?? 0;
 
-  const browser = await chromium.launch({ headless: true });
+  const client = new BrowserClient();
   const result: ListingResult = {
     total_cards_seen: 0,
     cards_parsed_ok: 0,
@@ -109,12 +113,7 @@ export async function scrapeListing(): Promise<ListingResult> {
   let runStatus = 'failed';
 
   try {
-    const context = await browser.newContext({
-      locale: 'es-PE',
-      userAgent:
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    });
-    const page = await context.newPage();
+    const page = await client.initialize();
 
     await page.goto(URL_LISTADO, {
       waitUntil: 'networkidle',
@@ -145,11 +144,24 @@ export async function scrapeListing(): Promise<ListingResult> {
       await sleep(TIMEOUTS.betweenPages);
     }
 
-    console.log(`[scrape:listing] Aplicando UPSERT de ${allInputs.length} cards`);
+    const uniqueNumeros = new Set(allInputs.map((i) => i.remate_numero));
+    console.log(`[scrape:listing] Aplicando UPSERT de ${allInputs.length} cards (${uniqueNumeros.size} remate_numero únicos)`);
+    if (uniqueNumeros.size < allInputs.length) {
+      const dupes = allInputs.map((i) => i.remate_numero).filter((n, idx, arr) => arr.indexOf(n) !== idx);
+      console.warn(`[scrape:listing] ⚠ Duplicados detectados:`, [...new Set(dupes)]);
+    }
+
+    const countBefore = (db.select({ c: sql<number>`count(*)` }).from(remates).get() as any)?.c ?? 0;
+    console.log(`[scrape:listing] Filas en BD antes del UPSERT: ${countBefore}`);
+
     const upsertResult = batchUpsertCards(db, remates, allInputs);
     result.upsert_inserted = upsertResult.inserted;
     result.upsert_updated = upsertResult.updated;
     result.upsert_failed = upsertResult.failed;
+    console.log(`[scrape:listing] UPSERT result → inserted:${upsertResult.inserted} updated:${upsertResult.updated} failed:${upsertResult.failed}`);
+
+    const countAfterUpsert = (db.select({ c: sql<number>`count(*)` }).from(remates).get() as any)?.c ?? 0;
+    console.log(`[scrape:listing] Filas en BD después del UPSERT: ${countAfterUpsert}`);
 
     if (result.upsert_failed === 0) {
       runStatus = 'success';
@@ -160,16 +172,19 @@ export async function scrapeListing(): Promise<ListingResult> {
 
       const archiveResult = archiveStaleRemates(db, remates, scrapingRuns);
       result.archived = archiveResult.archived_count;
+      console.log(`[scrape:listing] Archive result → archived:${archiveResult.archived_count} dry_run:${archiveResult.dry_run} threshold:${archiveResult.threshold_iso}`);
+
+      const countAfterArchive = (db.select({ c: sql<number>`count(*)` }).from(remates).get() as any)?.c ?? 0;
+      console.log(`[scrape:listing] Filas en BD después del archivo: ${countAfterArchive}`);
     } else {
       console.warn('[scrape:listing] Hubo errores en UPSERT, NO se archiva');
     }
 
-    await context.close();
   } catch (err) {
     console.error('[scrape:listing] FATAL:', err);
     throw err;
   } finally {
-    await browser.close();
+    await client.close();
     result.duration_seconds = (Date.now() - startTime) / 1000;
 
     if (runId && runStatus !== 'success') {

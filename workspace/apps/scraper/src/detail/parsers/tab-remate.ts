@@ -73,8 +73,8 @@ export function parseTabRemate(html: string): TabRemateResult {
     findValueByLabel($, /nro\.\s*expediente/i);
 
   const distrito_judicial = findValueByLabel($, /distrito judicial/i);
-  const juzgado_completo  = findValueByLabel($, /juzgado/i);
-  const juez              = findValueByLabel($, /juez/i);
+  const juzgado_completo  = findValueByLabel($, /[oó]rgano\s*jurisdisc|juzgado/i);
+  const juez              = findValueByLabel($, /^juez$/i);
   const especialista      = findValueByLabel($, /especialista/i);
   const materia           = findValueByLabel($, /materia/i);
 
@@ -107,10 +107,9 @@ export function parseTabRemate(html: string): TabRemateResult {
     findValueByLabel($, /participantes?/i);
   const num_inscritos = inscritosRaw ? parseInt(inscritosRaw.replace(/\D/g, ''), 10) : null;
 
-  // Resolución
-  const resolucion_numero = findValueByLabel($, /resoluci[oó]n\s*n[°º]/i) ??
-    findValueByLabel($, /n[°º]\s*resoluci[oó]n/i);
-  const resolucionFechaRaw = findValueByLabel($, /fecha\s*(de)?\s*resoluci[oó]n/i);
+  // Resolución — el label en el portal es simplemente "Resolución"
+  const resolucion_numero  = findValueByLabel($, /^resoluci[oó]n$/i);
+  const resolucionFechaRaw = findValueByLabel($, /fecha\s*(de\s*)?resoluci[oó]n/i);
   const resolucion_fecha   = parsePeruDate(resolucionFechaRaw);
 
   // PDF url — puede ser un <a> dentro de la celda
@@ -152,70 +151,25 @@ export function parseTabRemate(html: string): TabRemateResult {
 // Helpers
 // ============================================================================
 
-/**
- * Busca una celda cuyo texto matchee `labelRegex` y retorna el texto de la
- * celda hermana siguiente (o del span de valor dentro de ella).
- *
- * Soporta dos layouts comunes del portal:
- *   Layout A — PrimeFaces panelGrid (tabla de 2 columnas):
- *     <tr><td class="label">Tasación:</td><td class="value">S/ 150,000.00</td></tr>
- *
- *   Layout B — outputLabel + outputText inline:
- *     <span class="ui-outputlabel">Tasación:</span>
- *     <span class="ui-outputfield">S/ 150,000.00</span>
- */
+// Layout real del portal: div.text-bold (label) + siguiente div hermano (valor)
+// Estructura: <div class="ui-g"><div class="... text-bold">Label</div><div class="...">Valor</div></div>
 function findValueByLabel($: cheerio.CheerioAPI, labelRegex: RegExp): string | null {
-  // Layout A — buscar en <td>
   let found: string | null = null;
-
-  $('td').each((_, el) => {
-    const text = $(el).text().trim();
-    if (labelRegex.test(text)) {
-      const next = $(el).next('td');
-      const val = next.text().trim();
-      if (val) {
-        found = val;
-        return false; // break
-      }
-    }
-  });
-
-  if (found) return found;
-
-  // Layout B — buscar en span label + span value
-  $('span.ui-outputlabel, label').each((_, el) => {
-    const text = $(el).text().trim();
-    if (labelRegex.test(text)) {
-      // Buscar el outputText más cercano en el mismo bloque padre
-      const parent = $(el).parent();
-      const val = parent.find('span.ui-outputfield, span:not(.ui-outputlabel)').first().text().trim();
+  $('div.text-bold').each((_, el) => {
+    if (labelRegex.test($(el).text().trim())) {
+      const val = $(el).next('div').text().trim().replace(/\s+/g, ' ');
       if (val) {
         found = val;
         return false;
       }
     }
   });
-
   return found;
 }
 
-/**
- * Encuentra el href de un link <a> dentro de una celda cuyo label matchee.
- */
-function findPdfLink($: cheerio.CheerioAPI, labelRegex: RegExp): string | null {
-  let href: string | null = null;
-
-  $('td').each((_, el) => {
-    if (labelRegex.test($(el).text())) {
-      const link = $(el).next('td').find('a[href]');
-      if (link.length) {
-        href = link.attr('href') ?? null;
-        return false;
-      }
-    }
-  });
-
-  return href;
+// El PDF se descarga vía form submit (onclick), no hay href real — retorna null.
+function findPdfLink($: cheerio.CheerioAPI, _labelRegex: RegExp): string | null {
+  return null;
 }
 
 /**
@@ -226,8 +180,8 @@ function findPdfLink($: cheerio.CheerioAPI, labelRegex: RegExp): string | null {
  */
 function parseSoles(raw: string | null): number | null {
   if (!raw) return null;
-  // Quitar símbolo de moneda, comas (separadores de miles), espacios
-  const cleaned = raw.replace(/S\/\.?\s*/i, '').replace(/,/g, '').trim();
+  // Eliminar símbolo de moneda (S/., $, USD, etc.) y separadores de miles
+  const cleaned = raw.replace(/^[^\d]+/, '').replace(/,/g, '').trim();
   const num = parseFloat(cleaned);
   return isNaN(num) ? null : num;
 }
